@@ -1,13 +1,17 @@
 
 app.get("/api/health", (req, res) => {
   const raw = process.env.REPLICATE_API_TOKEN || "";
+  const clean = raw.trim();
+
   res.json({
     ok: true,
-    tokenSet: Boolean(TOKEN),
-    tokenLooksValid: TOKEN.startsWith("r8_") && TOKEN.length >= 30,
+    tokenSet: Boolean(clean),
+    tokenLooksValid:
+      clean.startsWith("r8_") &&
+      clean.length >= 30,
     rawLength: raw.length,
-    cleanLength: TOKEN.length,
-    first3: TOKEN.slice(0, 3),
-    port: PORT,
+    cleanLength: clean.length,
+    hasLeadingOrTrailingSpaces: raw !== clean,
+    port: PORT
   });
 });
