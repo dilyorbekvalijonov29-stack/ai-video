@@ -9,7 +9,7 @@
     * { box-sizing: border-box; }
     body {
       margin: 0; padding: 18px;
-      background: #101322; color: #fff;
+      background: #101322; color: white;
       font-family: Arial, sans-serif;
     }
     main {
@@ -18,7 +18,6 @@
       border-radius: 18px;
     }
     h1 { color: #a99aff; font-size: 28px; }
-    p { line-height: 1.5; }
     label { display:block; margin-top:18px; font-weight:bold; }
     textarea, select, input, button {
       width: 100%; padding: 14px; margin-top: 9px;
@@ -28,31 +27,30 @@
       background: #101322; color: white;
       border: 1px solid #555b78;
     }
-    input[type="file"] { padding: 10px; }
     button {
       border: 0; background: #7965ff;
-      color: white; font-weight: bold; cursor: pointer;
+      color: white; font-weight: bold;
     }
     button:disabled { opacity: .6; }
-    #status { overflow-wrap:anywhere; }
+    #status { overflow-wrap:anywhere; line-height:1.5; }
     video, #preview { width:100%; margin-top:16px; border-radius:10px; }
+    a { color:#c3baff; display:block; margin-top:12px; }
     .hint { color:#c7c9dc; font-size:13px; }
-    a { color:#c3baff; }
   </style>
 </head>
 <body>
 <main>
   <h1>🎬 AI Video Maker</h1>
-  <p>Матн ёки расмдан AI видео яратинг.</p>
+  <p>Матндан AI видео яратинг.</p>
 
   <label for="prompt">Видео ғояси</label>
   <textarea id="prompt" rows="4" maxlength="1000"
-    placeholder="Масалан: A lion walking through the African savanna at sunset..."></textarea>
+    placeholder="A lion walking through the African savanna at sunset"></textarea>
 
-  <label for="image">Расм юклаш (ихтиёрий)</label>
+  <label for="image">Расм юклаш</label>
   <input id="image" type="file" accept="image/png,image/jpeg,image/webp">
-  <p class="hint">PNG, JPG ёки WebP расм танланг.</p>
-  <img id="preview" hidden alt="Юкланган расм">
+  <p class="hint">Ҳозирги сервер фақат матнли сўровни қабул қилади. Расмдан видео ҳали уланмаган.</p>
+  <img id="preview" hidden alt="Расм намунаси">
 
   <label for="duration">Видео давомийлиги</label>
   <select id="duration">
@@ -81,69 +79,43 @@ imageInput.addEventListener("change", () => {
 
 button.addEventListener("click", async () => {
   const prompt = promptInput.value.trim();
-  const image = imageInput.files[0];
-  const duration = Number(document.getElementById("duration").value);
 
-  if (!prompt) {
-    statusText.textContent = "Аввал видео ғоясини ёзинг.";
-    return;
-  }
   if (prompt.length < 5) {
-    statusText.textContent = "Ғоя камида 5 та белгидан иборат бўлсин.";
+    statusText.textContent = "Аввал камида 5 та белгидан иборат видео ғоясини ёзинг.";
     return;
   }
-  if (image && image.size > 5 * 1024 * 1024) {
-    statusText.textContent = "Расм 5 MB дан кичик бўлиши керак.";
+
+  if (imageInput.files.length) {
+    statusText.textContent =
+      "Расмдан видео функцияси серверга ҳали уланмаган. Ҳозирча расмни олиб ташлаб, матн билан синаб кўринг.";
     return;
   }
 
   button.disabled = true;
   resultBox.replaceChildren();
-  statusText.textContent = "Серверга сўров юборилмоқда...";
+  statusText.textContent = "AI серверига сўров юборилмоқда...";
 
   try {
-    // Бу сўров матн ва давомийликни серверга юборади.
-    // Расмдан видео учун сервер ҳам image маълумотини қабул қилиши шарт.
-    const response = await fetch("/api/generate", {
+    const response = await fetch("/api/video", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt,
-        duration,
-        image: null
+        duration: Number(document.getElementById("duration").value)
       })
     });
 
     const data = await response.json();
+
     if (!response.ok) {
-      throw new Error(data.error || "Видео яратишда сервер хатоси.");
+      throw new Error(data.error || "Сервер хатоси: " + response.status);
     }
-    if (!data.id) throw new Error("Сервер вазифа ID рақамини қайтармади.");
 
-    for (let i = 0; i < 120; i++) {
-      statusText.textContent =
-        "Видео тайёрланмоқда... " + Math.round((i + 1) * 5 / 60) + " дақиқагача кутилади.";
+    if (data.status === "succeeded" && data.output) {
+      let url = Array.isArray(data.output) ? data.output[0] : data.output;
+      if (typeof url === "object" && url) url = url.url;
 
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      const check = await fetch(
-        "/api/status/" + encodeURIComponent(data.id)
-      );
-      const result = await check.json();
-
-      if (!check.ok) {
-        throw new Error(result.error || "Видео ҳолатини олиб бўлмади.");
-      }
-
-      if (result.status === "succeeded") {
-        let url = result.output;
-        if (Array.isArray(url)) url = url[0];
-        if (url && typeof url === "object") url = url.url;
-
-        if (typeof url !== "string" || !url.startsWith("https://")) {
-          throw new Error("Тайёр видео ҳаволаси топилмади.");
-        }
-
+      if (typeof url === "string" && url.startsWith("https://")) {
         const video = document.createElement("video");
         video.controls = true;
         video.playsInline = true;
@@ -154,21 +126,19 @@ button.addEventListener("click", async () => {
         link.href = url;
         link.target = "_blank";
         link.rel = "noopener";
-        link.textContent = "Тайёр видеони очиш ёки юклаб олиш";
-        link.style.display = "block";
-        link.style.marginTop = "14px";
+        link.textContent = "Тайёр видеони очиш";
         resultBox.appendChild(link);
-
         statusText.textContent = "Видео тайёр!";
-        return;
+      } else {
+        statusText.textContent = "Видео натижасининг ҳаволаси топилмади.";
       }
-
-      if (result.status === "failed" || result.status === "canceled") {
-        throw new Error(result.error || "AI модель видео ярата олмади.");
-      }
+    } else if (data.id) {
+      statusText.textContent =
+        "Сўров қабул қилинди. Видео ID: " + data.id +
+        ". Видео тайёр бўлишини автоматик текшириш учун серверга қўшимча ҳолат текшируви керак.";
+    } else {
+      statusText.textContent = "Сервер жавоб берди, аммо видео натижаси ҳали йўқ.";
     }
-
-    statusText.textContent = "Видео ҳали тайёр эмас. Кейинроқ текширинг.";
   } catch (error) {
     statusText.textContent = "Хато: " + error.message;
   } finally {
