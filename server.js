@@ -15,7 +15,7 @@ app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
     tokenSet: Boolean(TOKEN),
-    tokenLooksValid: TOKEN.startsWith("r8_") && TOKEN.length >= 30,
+    tokenLooksValid: TOKEN.length >= 30,
     tokenLength: TOKEN.length,
     port: PORT
   });
@@ -37,6 +37,14 @@ app.post("/api/video", async (req, res) => {
       });
     }
 
+    const version = process.env.REPLICATE_MODEL_VERSION;
+
+    if (!version) {
+      return res.status(500).json({
+        error: "REPLICATE_MODEL_VERSION is missing in Render Environment"
+      });
+    }
+
     const response = await fetch(
       "https://api.replicate.com/v1/predictions",
       {
@@ -46,7 +54,7 @@ app.post("/api/video", async (req, res) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          version: process.env.REPLICATE_MODEL_VERSION,
+          version,
           input: { prompt }
         })
       }
@@ -56,16 +64,21 @@ app.post("/api/video", async (req, res) => {
 
     if (!response.ok) {
       console.error("Replicate API error:", response.status, data);
+
       return res.status(response.status).json({
         error: data.detail || data.title || "Replicate API request failed",
         status: response.status
       });
     }
 
-    res.json(data);
+    return res.json(data);
   } catch (error) {
     console.error("Video request failed:", error.message);
-    res.status(500).json({ error: error.message });
+
+    return res.status(500).json({
+      error: "Video request failed",
+      details: error.message
+    });
   }
 });
 
